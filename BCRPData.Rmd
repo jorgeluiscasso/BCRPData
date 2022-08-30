@@ -1,0 +1,151 @@
+---
+title: "BCRPData"
+author: "Jorge Castillo"
+date: "2022-08-30"
+output: pdf_document
+urlcolor: blue
+---
+
+## BCRPData
+
+La Base de Datos de Estadísticas del BCRP (BCRPData) proporciona interfaces API para consultar series estadísticas desde otras aplicaciones web. [Mayor información aquí](https://estadisticas.bcrp.gob.pe/estadisticas/series/ayuda/api).
+
+## Metadatos de series
+
+El BCRP coloca a disposición del público los metadatos de las series estadísticas que difunde. [Mayor información aquí](https://estadisticas.bcrp.gob.pe/estadisticas/series/ayuda/metadatos).
+
+```{r metadata, warning=FALSE, echo=FALSE, message=FALSE}
+#install.packages("dplyr")
+library(dplyr)
+#install.packages("kableExtra")
+library(kableExtra)
+
+metadata <- read.csv(url("https://estadisticas.bcrp.gob.pe/estadisticas/series/metadata"),
+                     sep=";")
+
+metadata[, c(1, 4, 11, 12)] %>%
+  rename("Código de serie"="Código.de.serie",
+         "Nombre de serie"="Nombre.de.serie",
+         "Inicio"="Fecha.de.inicio",
+         "Fin"="Fecha.de.fin") %>%
+  head(15) %>%
+  kbl(booktabs=T) %>%
+  kable_styling(position="center", latex_options=c("hold_position"))
+```
+
+Se utiliza el código de serie para consultar los datos a través de la API.
+
+## Usando R
+
+### Librerías
+
+```{r packages_r, warning=FALSE}
+#install.packages("httr")
+library(httr)
+#install.packages("jsonlite")
+library(jsonlite)
+```
+
+### Función para consultar datos
+
+```{r bcrp_data_r}
+bcrp_data <- function(serie, inicio, fin){
+  
+  # Establecer consulta
+  periodo <- paste("/", inicio, "/", fin, sep="")
+  url <- paste("https://estadisticas.bcrp.gob.pe/estadisticas/series/api/",
+               serie,
+               "/json",
+               periodo,
+               sep="")
+  
+  # Consulta de datos
+  serie_api <- GET(url)
+  serie_json <- fromJSON(rawToChar(serie_api$content))
+  serie_df <- as.data.frame(serie_json$periods)
+  names(serie_df)[1] <- "Fecha"
+  names(serie_df)[2] <- as.character(serie_json$config$title)
+  return(serie_df)
+  
+}
+```
+
+### Ejemplo
+
+```{r serie_r, eval=FALSE}
+fecha_inicio <- "2017-01"
+fecha_fin <- "2022-08"
+pbi <- "PN01770AM"
+
+bcrp_data(pbi, fecha_inicio, fecha_fin)
+```
+
+```{r serie_muestra_r, echo=FALSE}
+fecha_inicio <- "2017-01"
+fecha_fin <- "2022-08"
+pbi <- "PN01770AM"
+
+bcrp_data(pbi, fecha_inicio, fecha_fin) %>%
+  head() %>%
+  kbl(booktabs=T) %>%
+  kable_styling(position="center", latex_options=c("hold_position"))
+```
+
+## Usando Python
+
+### Librerías
+
+```{python packages_python, warning=FALSE}
+import requests
+import pandas as pd
+```
+
+### Función para consultar datos
+
+```{python bcrp_data_python}
+def bcrp_data(serie, inicio, fin):
+  
+  # Establecer consulta
+  periodo = '/'+inicio+'/'+fin
+  url = 'https://estadisticas.bcrp.gob.pe/estadisticas/series/api/'+serie+'/json'+periodo
+  
+  # Consulta de datos
+  serie_api = requests.get(url)
+  serie_json = serie_api.json()
+  
+  serie = serie_json.get('config')['series'][0]['name']
+  periodos = serie_json.get('periods')
+  
+  valores = []
+  for p in periodos:
+    values = p['values']
+    for v in values:
+      v = float(v)
+      valores.append(v)
+  fechas = []
+  for p in periodos:
+    name = p['name']
+    fechas.append(name)
+  
+  serie_dic = {"Fecha":fechas, str(serie):valores}
+  serie_df = pd.DataFrame(serie_dic)
+  return(serie_df)
+```
+
+### Ejemplo
+
+```{python serie_python, eval=FALSE}
+fecha_inicio = '2017-01'
+fecha_fin = '2022-08'
+pbi = 'PN01770AM'
+
+bcrp_data(pbi, fecha_inicio, fecha_fin)
+```
+
+```{python serie_muestra_python, echo=FALSE}
+fecha_inicio = '2017-01'
+fecha_fin = '2022-08'
+pbi = 'PN01770AM'
+
+bcrp_data(pbi, fecha_inicio, fecha_fin).head()
+```
